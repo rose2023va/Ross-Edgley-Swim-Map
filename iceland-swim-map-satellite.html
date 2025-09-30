@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -39,45 +38,48 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Make sure swim-legs.js ONLY defines the data array `swimLegs` and does NOT declare its own map -->
   <script src="swim-legs.js"></script>
   <script>
+    // ✅ Only declare the map ONCE
     const map = L.map('map', {
       center: [64.9631, -19.0208],
       zoom: 6,
       zoomControl: true
     });
 
-    // Use Esri Satellite View
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/' +
-      'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, USGS, NOAA',
-      maxZoom: 18
-    }).addTo(map);
+    // Satellite base layer
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, USGS, NOAA',
+        maxZoom: 18
+      }
+    ).addTo(map);
 
     const legLayers = {};
 
     swimLegs.forEach(leg => {
       const start = [parseFloat(leg.start_lat), parseFloat(leg.start_lng)];
-      const end = [parseFloat(leg.end_lat), parseFloat(leg.end_lng)];
+      const end   = [parseFloat(leg.end_lat), parseFloat(leg.end_lng)];
 
       const polyline = L.polyline([start, end], {
         color: 'red',
         weight: 4,
         opacity: 0.9
       }).bindPopup(
-        `<strong>Swim Leg ${leg.leg}</strong><br>
-         ${leg.start_date} ${leg.start_time} → ${leg.stop_time}<br>
-         Distance: ${leg.distance_km} km`
+        `<strong>${leg.filename || 'Swim Leg'}</strong><br>
+         ${leg.start_date} ${leg.start_time} → ${leg.end_time}<br>
+         Distance: ${leg.distance_km || ''} km`
       );
 
-      legLayers[leg.leg] = polyline;
+      legLayers[leg.filename] = polyline;
 
       const checkbox = document.createElement('div');
       checkbox.className = 'filter-item';
       checkbox.innerHTML = `
         <label>
-          <input type="checkbox" onchange="toggleLeg('${leg.leg}', this.checked)">
-          Swim Leg ${leg.leg}
+          <input type="checkbox" onchange="toggleLeg('${leg.filename}', this.checked)">
+          ${leg.filename}
         </label>
       `;
       document.getElementById('checkboxes').appendChild(checkbox);
