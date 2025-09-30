@@ -38,10 +38,9 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Make sure swim-legs.js ONLY defines the data array `swimLegs` and does NOT declare its own map -->
   <script src="swim-legs.js"></script>
   <script>
-    // ✅ Only declare the map ONCE
+    // Create the map (only once!)
     const map = L.map('map', {
       center: [64.9631, -19.0208],
       zoom: 6,
@@ -50,62 +49,81 @@
 
     // Satellite base layer
     L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, USGS, NOAA',
-        maxZoom: 18
-      }
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri — USGS, NOAA', maxZoom: 18 }
     ).addTo(map);
 
-    const legLayers = {};
+    // --- helpers ---
+    function parseLatLon(pair) {
+      if (!pair) return null;
+      const [lat, lon] = String(pair).split(',').map(Number);
+      if (isNaN(lat) || isNaN(lon)) return null;
+      return [lat, lon]; // sheet is lat,lon
+    }
 
-    swimLegs.forEach(leg => {
-      const start = [parseFloat(leg.start_lat), parseFloat(leg.start_lng)];
-      const end   = [parseFloat(leg.end_lat), parseFloat(leg.end_lng)];
+    const legLayers = {};
+    const bounds = L.latLngBounds();
+    const listEl = document.getElementById('checkboxes');
+
+    // Loop over swim legs
+    (window.swimLegs || []).forEach((leg, idx) => {
+      const start = parseLatLon(leg.start_coordinates);
+      const end   = parseLatLon(leg.end_coordinates);
+      if (!start || !end) return;
+
+      const name = (leg.filename && leg.filename.trim()) || `Leg ${idx+1}`;
 
       const polyline = L.polyline([start, end], {
         color: 'red',
         weight: 4,
         opacity: 0.9
       }).bindPopup(
-        `<strong>${leg.filename || 'Swim Leg'}</strong><br>
-         ${leg.start_date} ${leg.start_time} → ${leg.end_time}<br>
-         Distance: ${leg.distance_km || ''} km`
+        `<strong>${name}</strong><br>
+         ${leg.start_date || ''} ${leg.start_time || ''} → ${leg.finish_date || ''} ${leg.end_time || ''}<br>
+         <small>Start: ${leg.start_coordinates}<br>End: ${leg.end_coordinates}</small>`
       );
 
-      legLayers[leg.filename] = polyline;
+      legLayers[name] = polyline;
+      polyline.addTo(map); // show by default
+      bounds.extend(polyline.getBounds());
 
-      const checkbox = document.createElement('div');
-      checkbox.className = 'filter-item';
-      checkbox.innerHTML = `
+      // checkbox UI
+      const row = document.createElement('div');
+      row.className = 'filter-item';
+      row.innerHTML = `
         <label>
-          <input type="checkbox" onchange="toggleLeg('${leg.filename}', this.checked)">
-          ${leg.filename}
-        </label>
-      `;
-      document.getElementById('checkboxes').appendChild(checkbox);
+          <input type="checkbox" checked onchange="toggleLeg('${name.replace(/'/g,"&#39;")}', this.checked)">
+          ${name}
+        </label>`;
+      listEl.appendChild(row);
     });
 
-    function toggleLeg(legId, show) {
-      if (show) {
-        legLayers[legId].addTo(map);
-      } else {
-        map.removeLayer(legLayers[legId]);
-      }
+    if (bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.1));
+    } else {
+      console.warn('No valid swim legs drawn. Check swim-legs.js format.');
     }
 
-    function showAll() {
-      Object.keys(legLayers).forEach(legId => {
-        legLayers[legId].addTo(map);
-        document.querySelector(`input[type="checkbox"][onchange*="${legId}"]`).checked = true;
-      });
-    }
+    // Control functions
+    window.toggleLeg = function(legId, show) {
+      const layer = legLayers[legId];
+      if (!layer) return;
+      if (show) layer.addTo(map); else map.removeLayer(layer);
+    };
 
-    function clearAll() {
-      Object.keys(legLayers).forEach(legId => {
-        map.removeLayer(legLayers[legId]);
-        document.querySelector(`input[type="checkbox"][onchange*="${legId}"]`).checked = false;
+    window.showAll = function() {
+      Object.keys(legLayers).forEach(id => {
+        legLayers[id].addTo(map);
+        document.querySelector(`#checkboxes input[onchange*="${id}"]`).checked = true;
       });
-    }
+    };
+
+    window.clearAll = function() {
+      Object.keys(legLayers).forEach(id => {
+        map.removeLayer(legLayers[id]);
+        document.querySelector(`#checkboxes input[onchange*="${id}"]`).checked = false;
+      });
+    };
   </script>
 </body>
 </html>
