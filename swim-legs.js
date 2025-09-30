@@ -1,5 +1,5 @@
 // ====== CONFIG ======
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRtXUJdZR_9Ul9Fp7gIiipv9rR9EBLvgcwV3-VMt2SNwkmWbOcc4HLZTw18bwE3g9JjvjMY7q1QlF1g/pub?gid=127139592&single=true&output=csv';
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRtXUJdZR_9Ul9Fp7gIiipv9rR9EBLvgcwV3-VMt2SNwkmWbOcc4HLZTw18bwE3g9JjvjMY7q1QlF1g/pub?output=csv';
 // If your coordinates are "lat,lon" keep FLIP_LONLAT=false (default).
 // If you discover they were saved "lon,lat", set this to true.
 const FLIP_LONLAT = false;
