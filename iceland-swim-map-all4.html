@@ -2,16 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Iceland Swim Map - All 4 Sets</title>
+  <title>Swim Legs (All 4 Sets)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body { margin:0; display:flex; font-family:Arial,sans-serif; }
+    body { margin:0; display:flex; font-family: Arial, sans-serif; }
     #filters { width:280px; padding:16px; background:#fff; border-right:1px solid #ddd; overflow-y:auto; height:100vh; }
     #map { flex:1; height:100vh; }
-    .filter-item{ margin:8px 0; }
-    button{ margin-right:6px; }
-    h4 { margin: 12px 0 6px; border-bottom:1px solid #ccc; padding-bottom:4px; }
+    .dataset h4 { margin:12px 0 6px; border-bottom:1px solid #ddd; padding-bottom:4px; }
+    .filter-item { margin:6px 0; }
+    button { margin-right:6px; }
   </style>
 </head>
 <body>
@@ -23,11 +23,28 @@
   </div>
   <div id="map"></div>
 
-  <!-- Libs -->
+  <!-- libs -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <!-- Data loader -->
+  <!-- your multi-dataset logic -->
   <script src="swim-legs-all4.js"></script>
+
+  <!-- create the map and start the app -->
+  <script>
+    // Create Leaflet map
+    const map = L.map('map', { center: [64.9631, -19.0208], zoom: 6, zoomControl: true });
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri — USGS, NOAA', maxZoom: 18 }
+    ).addTo(map);
+
+    // Call the initializer defined in swim-legs-all4.js
+    if (window.initSwimMap) {
+      window.initSwimMap(map);
+    } else {
+      console.error('initSwimMap not found. Make sure swim-legs-all4.js is loading.');
+    }
+  </script>
 </body>
 </html>
