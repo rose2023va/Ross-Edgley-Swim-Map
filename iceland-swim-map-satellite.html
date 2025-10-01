@@ -78,6 +78,13 @@
              ${r.start_date||''} ${r.start_time||''} → ${r.finish_date||''} ${r.end_time||''}<br>
              <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
           )
+          const line = L.polyline([start, end], { color:'red', weight:4, opacity:0.9 })
+          .bindPopup(
+            `<strong>${name}</strong><br>
+             ${r.start_date||''} ${r.start_time||''} → ${r.finish_date||''} ${r.end_time||''}<br>
+             <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
+          )
+          .bindTooltip(name)   // <---- shows filename on hover
           .addTo(map);
 
         legLayers[name] = line;
