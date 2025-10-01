@@ -1,11 +1,12 @@
-// swim-legs-all4.js
-// Config: 4 CSV datasets with colors
-const datasets = [
+// ================== CONFIG (edit URLs as needed) ==================
+const DATASETS = [
   { name: "Main GPX",   url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/consolidated_gpx%20-%20consolidated_gpx.csv",   color: "red" },
   { name: "Skirr GPX",  url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/Skirr%20GPX%20-%20Skirr%20GPX.csv",  color: "blue" },
   { name: "Garmin GPX", url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/GarminGPX%20-%20GarminGPX.csv", color: "green" },
   { name: "Marshall Garmin GPX",  url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/Marshall_Garmin.csv",   color: "pink" }
 ];
+// If you prefer RAW GitHub URLs, replace each `url` with the Raw link.
+
 // ================== MAP SETUP ==================
 const map = L.map("map", { center:[64.9631,-19.0208], zoom:6, zoomControl:true });
 L.tileLayer(
