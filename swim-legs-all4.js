@@ -1,129 +1,203 @@
-// ================== CONFIG (edit URLs as needed) ==================
+/* ===================== CONFIG ===================== */
 const DATASETS = [
   { name: "Main GPX",   url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/consolidated_gpx%20-%20consolidated_gpx.csv",   color: "red" },
   { name: "Skirr GPX",  url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/Skirr%20GPX%20-%20Skirr%20GPX.csv",  color: "blue" },
   { name: "Garmin GPX", url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/GarminGPX%20-%20GarminGPX.csv", color: "green" },
-  { name: "Marshall Garmin GPX",  url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/Marshall_Garmin.csv",   color: "pink" }
+  { name: "Marshall Garmin GPX", url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/Marshall_Garmin.csv", color: "pink" }
 ];
-// If you prefer RAW GitHub URLs, replace each `url` with the Raw link.
 
-// ================== MAP SETUP ==================
-const map = L.map("map", { center:[64.9631,-19.0208], zoom:6, zoomControl:true });
-L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  { attribution: "Tiles © Esri — USGS, NOAA", maxZoom: 18 }
-).addTo(map);
-
-// ================== HELPERS ==================
-function parseLatLon(pair){
-  if (!pair) return null;
-  const [lat, lon] = String(pair).split(",").map(s => Number(s.trim()));
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  return [lat, lon]; // lat,lon
-}
-
+/* =============== CSV / UTIL FUNCTIONS ============= */
 function normalizeHeader(h){
-  return String(h||"").replace(/^\uFEFF/,"").trim().toLowerCase().replace(/\s+/g,"_");
+  return String(h||'')
+    .replace(/^\uFEFF/,'')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g,'_')
+    .replace(/[^a-z0-9_]/g,'');
 }
-
 function isLatLonString(s){
-  return /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(String(s||""));
+  return /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(String(s||''));
 }
-
+function parseLatLon(pair){
+  const [lat,lon] = String(pair).split(',').map(x=>Number(String(x).trim()));
+  return (Number.isFinite(lat) && Number.isFinite(lon)) ? [lat,lon] : null;
+}
+function toUtcDate(row){
+  const d=(row.start_date||'').trim();
+  const t=(row.start_time||'00:00:00').trim();
+  if(!d) return null;
+  const iso=`${d}T${t.endsWith('Z')?t:(t+'Z')}`;
+  const ms=Date.parse(iso);
+  return Number.isNaN(ms)?null:new Date(ms);
+}
+const CENTER={lat:64.9631,lon:-19.0208};
+function angleFromCenter(lat,lon){
+  let deg = Math.atan2(lat-CENTER.lat, lon-CENTER.lon)*180/Math.PI;
+  return deg<0?deg+360:deg;
+}
 function loadCsv(url){
-  return fetch(url, { cache:"no-cache" })
+  return fetch(url, { cache:'no-cache' })
     .then(r => r.text())
     .then(text => {
-      if (/^\s*<!doctype html/i.test(text) || /<html[\s>]/i.test(text)) {
-        throw new Error("Got HTML instead of CSV — use a file path in the site or a RAW GitHub URL.");
+      if (/^\s*<!doctype html/i.test(text) || /\<html[\s>]/i.test(text)) {
+        throw new Error('Got HTML instead of CSV. Use the RAW file URL.');
       }
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve,reject)=>{
         Papa.parse(text, {
-          header: true,
-          skipEmptyLines: "greedy",
+          header:true,
+          skipEmptyLines:'greedy',
           transformHeader: normalizeHeader,
-          complete: res => resolve(res.data || []),
+          complete: res => {
+            const rows=(res.data||[]).map(obj=>{
+              const out={};
+              for(const k in obj){
+                out[normalizeHeader(k)] = String(obj[k] ?? '').trim();
+              }
+              return out;
+            });
+            const good=[];
+            for(const r of rows){
+              if (r.filename && isLatLonString(r.start_coordinates) && isLatLonString(r.end_coordinates)){
+                good.push(r);
+              }
+            }
+            resolve(good);
+          },
           error: reject
         });
       });
     });
 }
 
-// ================== RENDERING ==================
-const panel = document.getElementById("checkboxes");
-const allLayers = {};                // key -> Leaflet layer
-const datasetGroups = [];            // per-dataset layerGroup + DOM refs
-const globalBounds = L.latLngBounds();
+/* ===================== RENDERING ===================== */
+function initSwimMap(map){
+  const container = document.getElementById('checkboxes');
+  const globalBounds = L.latLngBounds();
+  const allDatasets = [];
+  let remaining = DATASETS.length;
 
-DATASETS.forEach((ds, idx) => {
-  // Make a dedicated section for this dataset
-  const section = document.createElement("div");
-  section.className = "dataset";
-  section.innerHTML = `
-    <h4>${ds.name}</h4>
-    <div class="list" id="list-ds-${idx}"></div>
-  `;
-  panel.appendChild(section);
+  DATASETS.forEach((ds, index)=>{
+    // Sidebar section
+    const section = document.createElement('div');
+    section.className = 'dataset';
+    section.innerHTML = `
+      <h4>
+        <label><input type="checkbox" class="ds-toggle" data-ds="${index}" checked> ${ds.name}</label>
+        <button class="ds-show"  data-ds="${index}">Show</button>
+        <button class="ds-clear" data-ds="${index}">Clear</button>
+      </h4>
+      <div id="list-ds-${index}"></div>
+    `;
+    container.appendChild(section);
 
-  const listEl = section.querySelector(`#list-ds-${idx}`);
-  const group = L.layerGroup().addTo(map);
+    // Map group + state
+    const group = L.layerGroup().addTo(map);
+    const legLayers = {};
+    const listEl = section.querySelector(`#list-ds-${index}`);
+    const dataset = { name: ds.name, color: ds.color, group, legLayers, listEl };
+    allDatasets.push(dataset);
 
-  datasetGroups.push({ name: ds.name, group, listEl });
+    // Load & render
+    loadCsv(ds.url).then(rows=>{
+      rows.sort((a,b)=>{
+        const da=toUtcDate(a), db=toUtcDate(b);
+        if(da && db) return da - db;
+        const as=parseLatLon(a.start_coordinates), bs=parseLatLon(b.start_coordinates);
+        if(as && bs) return angleFromCenter(as[0],as[1]) - angleFromCenter(bs[0],bs[1]);
+        return 0;
+      });
 
-  // Load and render this dataset into its own list & group
-  loadCsv(ds.url).then(rows => {
-    rows.forEach((r, i) => {
-      // Expect columns: filename,start_date,finish_date,start_time,end_time,start_coordinates,end_coordinates
-      const start = isLatLonString(r.start_coordinates) ? parseLatLon(r.start_coordinates) : null;
-      const end   = isLatLonString(r.end_coordinates)   ? parseLatLon(r.end_coordinates)   : null;
-      if (!start || !end) return;
+      rows.forEach((r, i)=>{
+        const start=parseLatLon(r.start_coordinates);
+        const end=parseLatLon(r.end_coordinates);
+        if(!start || !end) return;
 
-      const name = (r.filename && r.filename.trim()) || `Leg ${i+1}`;
-      const key  = `${idx}|${name}`; // unique per dataset + filename
+        const name=(r.filename||`Leg ${i+1}`).trim();
+        const uid = `${index}|${name}`;
 
-      // Map line (colored per dataset)
-      const line = L.polyline([start, end], { color: ds.color, weight: 4, opacity: 0.9 })
-        .bindTooltip(name) // show filename on hover
-        .bindPopup(
-          `<strong>${name}</strong><br>
-           ${r.start_date||""} ${r.start_time||""} → ${r.finish_date||""} ${r.end_time||""}<br>
-           <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
-        );
+        const line = L.polyline([start,end], {
+            color: dataset.color,
+            weight: 4,
+            opacity: 0.9
+          })
+          .bindPopup(
+            `<strong>${name}</strong><br>
+             ${r.start_date||''} ${r.start_time||''} → ${r.finish_date||''} ${r.end_time||''}<br>
+             <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
+          )
+          .bindTooltip(name);
 
-      line.addTo(group);
-      allLayers[key] = line;
-      globalBounds.extend(line.getBounds());
+        line.addTo(group);
+        dataset.legLayers[uid] = line;
+        globalBounds.extend(line.getBounds());
 
-      // Checkbox row for THIS dataset only
-      const row = document.createElement("div");
-      row.className = "filter-item";
-      const safe = name.replace(/"/g,'&quot;').replace(/'/g,"&#39;");
-      row.innerHTML = `<label><input type="checkbox" data-key="${key}" checked> ${safe}</label>`;
-      listEl.appendChild(row);
+        // Checkbox
+        const item = document.createElement('div');
+        item.className = 'filter-item';
+        const safe = name.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        item.innerHTML = `<label><input type="checkbox" data-uid="${uid}" checked> ${safe}</label>`;
+        listEl.appendChild(item);
+      });
+
+      // Dataset toggles
+      section.querySelector('.ds-toggle').addEventListener('change', e=>{
+        if(e.target.checked) group.addTo(map); else map.removeLayer(group);
+      });
+      section.querySelector('.ds-show').addEventListener('click', ()=>{
+        group.addTo(map);
+        section.querySelector('.ds-toggle').checked = true;
+        listEl.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+          cb.checked = true;
+          const layer = legLayers[cb.dataset.uid];
+          if(layer) group.addLayer(layer);
+        });
+      });
+      section.querySelector('.ds-clear').addEventListener('click', ()=>{
+        listEl.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+          cb.checked = false;
+          const layer = legLayers[cb.dataset.uid];
+          if(layer) group.removeLayer(layer);
+        });
+      });
+      listEl.addEventListener('change', e=>{
+        const cb = e.target.closest('input[type="checkbox"]'); if(!cb) return;
+        const layer = legLayers[cb.dataset.uid]; if(!layer) return;
+        if(cb.checked) group.addLayer(layer); else group.removeLayer(layer);
+      });
+
+    }).catch(err=>{
+      console.error(`Failed to load ${ds.name}:`, err);
+    }).finally(()=>{
+      remaining--;
+      if (remaining===0 && globalBounds.isValid()) {
+        map.fitBounds(globalBounds.pad(0.1));
+      }
     });
-
-    if (globalBounds.isValid()) map.fitBounds(globalBounds.pad(0.1));
-  }).catch(err => {
-    console.error(`Failed to load ${ds.name}:`, err);
   });
-});
 
-// Per-leg toggle (delegated per dataset section)
-panel.addEventListener("change", e => {
-  const cb = e.target.closest('input[type="checkbox"][data-key]');
-  if (!cb) return;
-  const key = cb.dataset.key;
-  const layer = allLayers[key];
-  if (!layer) return;
-  if (cb.checked) layer.addTo(map); else map.removeLayer(layer);
-});
+  // Global Show/Clear
+  window.showAll = function(){
+    allDatasets.forEach((d, i)=>{
+      d.group.addTo(map);
+      const t=document.querySelector(`.ds-toggle[data-ds="${i}"]`);
+      if(t) t.checked=true;
+      d.listEl.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+        cb.checked=true;
+        const layer = d.legLayers[cb.dataset.uid];
+        if(layer) d.group.addLayer(layer);
+      });
+    });
+  };
+  window.clearAll = function(){
+    allDatasets.forEach(d=>{
+      d.listEl.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+        cb.checked=false;
+        const layer=d.legLayers[cb.dataset.uid];
+        if(layer) d.group.removeLayer(layer);
+      });
+    });
+  };
+}
 
-// Global buttons wired from HTML
-window.showAll = function(){
-  Object.values(allLayers).forEach(layer => layer.addTo(map));
-  panel.querySelectorAll('input[type="checkbox"][data-key]').forEach(cb => cb.checked = true);
-};
-window.clearAll = function(){
-  Object.values(allLayers).forEach(layer => map.removeLayer(layer));
-  panel.querySelectorAll('input[type="checkbox"][data-key]').forEach(cb => cb.checked = false);
-};
+/* Expose initializer */
+window.initSwimMap = initSwimMap;
