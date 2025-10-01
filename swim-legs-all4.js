@@ -6,90 +6,123 @@ const datasets = [
   { name: "Garmin GPX", url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/GarminGPX%20-%20GarminGPX.csv", color: "green" },
   { name: "Marshall Garmin GPX",  url: "https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/Marshall_Garmin.csv",   color: "pink" }
 ];
-
+// ================== MAP SETUP ==================
 const map = L.map("map", { center:[64.9631,-19.0208], zoom:6, zoomControl:true });
-
 L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   { attribution: "Tiles © Esri — USGS, NOAA", maxZoom: 18 }
 ).addTo(map);
 
-const legLayers = {};
-const bounds = L.latLngBounds();
-const listEl = document.getElementById("checkboxes");
-
+// ================== HELPERS ==================
 function parseLatLon(pair){
-  if(!pair) return null;
+  if (!pair) return null;
   const [lat, lon] = String(pair).split(",").map(s => Number(s.trim()));
-  if(Number.isNaN(lat) || Number.isNaN(lon)) return null;
-  return [lat, lon]; // lat,lon order
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return [lat, lon]; // lat,lon
 }
 
-function addCheckbox(group, name){
-  const row = document.createElement("div");
-  row.className = "filter-item";
-  row.innerHTML = `
-    <label>
-      <input type="checkbox" checked onchange="toggleLeg('${group}_${name}', this.checked)">
-      ${name}
-    </label>`;
-  listEl.appendChild(row);
+function normalizeHeader(h){
+  return String(h||"").replace(/^\uFEFF/,"").trim().toLowerCase().replace(/\s+/g,"_");
 }
 
-// Load each dataset
-datasets.forEach(ds => {
-  // Group header
-  const h4 = document.createElement("h4");
-  h4.textContent = ds.name;
-  listEl.appendChild(h4);
+function isLatLonString(s){
+  return /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(String(s||""));
+}
 
-  Papa.parse(ds.url, {
-    download: true,
-    header: true,
-    complete: function(results){
-      results.data.forEach((r, idx) => {
-        const start = parseLatLon(r.start_coordinates);
-        const end   = parseLatLon(r.end_coordinates);
-        if(!start || !end) return;
-
-        const name = (r.filename && r.filename.trim()) || `Leg ${idx+1}`;
-        const key  = `${ds.name}_${name}`;
-
-        const line = L.polyline([start,end], { color: ds.color, weight:4, opacity:0.9 })
-          .bindTooltip(name) // show filename on hover
-          .bindPopup(
-            `<strong>${name}</strong><br>
-             ${r.start_date||""} ${r.start_time||""} → ${r.finish_date||""} ${r.end_time||""}<br>
-             <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
-          )
-          .addTo(map);
-
-        legLayers[key] = line;
-        bounds.extend(line.getBounds());
-        addCheckbox(ds.name, name);
+function loadCsv(url){
+  return fetch(url, { cache:"no-cache" })
+    .then(r => r.text())
+    .then(text => {
+      if (/^\s*<!doctype html/i.test(text) || /<html[\s>]/i.test(text)) {
+        throw new Error("Got HTML instead of CSV — use a file path in the site or a RAW GitHub URL.");
+      }
+      return new Promise((resolve, reject) => {
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: "greedy",
+          transformHeader: normalizeHeader,
+          complete: res => resolve(res.data || []),
+          error: reject
+        });
       });
-      if(bounds.isValid()) map.fitBounds(bounds.pad(0.1));
-    }
+    });
+}
+
+// ================== RENDERING ==================
+const panel = document.getElementById("checkboxes");
+const allLayers = {};                // key -> Leaflet layer
+const datasetGroups = [];            // per-dataset layerGroup + DOM refs
+const globalBounds = L.latLngBounds();
+
+DATASETS.forEach((ds, idx) => {
+  // Make a dedicated section for this dataset
+  const section = document.createElement("div");
+  section.className = "dataset";
+  section.innerHTML = `
+    <h4>${ds.name}</h4>
+    <div class="list" id="list-ds-${idx}"></div>
+  `;
+  panel.appendChild(section);
+
+  const listEl = section.querySelector(`#list-ds-${idx}`);
+  const group = L.layerGroup().addTo(map);
+
+  datasetGroups.push({ name: ds.name, group, listEl });
+
+  // Load and render this dataset into its own list & group
+  loadCsv(ds.url).then(rows => {
+    rows.forEach((r, i) => {
+      // Expect columns: filename,start_date,finish_date,start_time,end_time,start_coordinates,end_coordinates
+      const start = isLatLonString(r.start_coordinates) ? parseLatLon(r.start_coordinates) : null;
+      const end   = isLatLonString(r.end_coordinates)   ? parseLatLon(r.end_coordinates)   : null;
+      if (!start || !end) return;
+
+      const name = (r.filename && r.filename.trim()) || `Leg ${i+1}`;
+      const key  = `${idx}|${name}`; // unique per dataset + filename
+
+      // Map line (colored per dataset)
+      const line = L.polyline([start, end], { color: ds.color, weight: 4, opacity: 0.9 })
+        .bindTooltip(name) // show filename on hover
+        .bindPopup(
+          `<strong>${name}</strong><br>
+           ${r.start_date||""} ${r.start_time||""} → ${r.finish_date||""} ${r.end_time||""}<br>
+           <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
+        );
+
+      line.addTo(group);
+      allLayers[key] = line;
+      globalBounds.extend(line.getBounds());
+
+      // Checkbox row for THIS dataset only
+      const row = document.createElement("div");
+      row.className = "filter-item";
+      const safe = name.replace(/"/g,'&quot;').replace(/'/g,"&#39;");
+      row.innerHTML = `<label><input type="checkbox" data-key="${key}" checked> ${safe}</label>`;
+      listEl.appendChild(row);
+    });
+
+    if (globalBounds.isValid()) map.fitBounds(globalBounds.pad(0.1));
+  }).catch(err => {
+    console.error(`Failed to load ${ds.name}:`, err);
   });
 });
 
-// UI functions
-window.toggleLeg = function(id, show){
-  const layer = legLayers[id];
-  if(!layer) return;
-  if(show) layer.addTo(map); else map.removeLayer(layer);
-};
+// Per-leg toggle (delegated per dataset section)
+panel.addEventListener("change", e => {
+  const cb = e.target.closest('input[type="checkbox"][data-key]');
+  if (!cb) return;
+  const key = cb.dataset.key;
+  const layer = allLayers[key];
+  if (!layer) return;
+  if (cb.checked) layer.addTo(map); else map.removeLayer(layer);
+});
 
+// Global buttons wired from HTML
 window.showAll = function(){
-  Object.keys(legLayers).forEach(id => {
-    legLayers[id].addTo(map);
-    document.querySelectorAll("#checkboxes input").forEach(cb => cb.checked = true);
-  });
+  Object.values(allLayers).forEach(layer => layer.addTo(map));
+  panel.querySelectorAll('input[type="checkbox"][data-key]').forEach(cb => cb.checked = true);
 };
-
 window.clearAll = function(){
-  Object.keys(legLayers).forEach(id => {
-    map.removeLayer(legLayers[id]);
-    document.querySelectorAll("#checkboxes input").forEach(cb => cb.checked = false);
-  });
+  Object.values(allLayers).forEach(layer => map.removeLayer(layer));
+  panel.querySelectorAll('input[type="checkbox"][data-key]').forEach(cb => cb.checked = false);
 };
