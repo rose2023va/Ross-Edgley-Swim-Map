@@ -6,11 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body { margin:0; display:flex; font-family:Arial,sans-serif; }
-    #filters { width:260px; padding:16px; background:#fff; border-right:1px solid #ddd; overflow-y:auto; height:100vh; }
-    #map { flex:1; height:100vh; }
-    .filter-item{ margin:8px 0; }
-    button{ margin-right:6px; }
+    body{margin:0;display:flex;font-family:Arial,sans-serif}
+    #filters{width:260px;padding:16px;background:#fff;border-right:1px solid #ddd;overflow-y:auto;height:100vh}
+    #map{flex:1;height:100vh}
+    .dataset{margin:10px 0 14px}
+    .dataset h4{margin:0 0 8px;display:flex;gap:6px;align-items:center}
+    .filter-item{margin:6px 0}
+    button{margin-right:6px}
   </style>
 </head>
 <body>
@@ -22,103 +24,23 @@
   </div>
   <div id="map"></div>
 
-  <!-- Libs -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <!-- Data loader (fetches CSV from Google Sheets) -->
-  <script src="swim-legs.js"></script>
-
   <script>
-    // --- 1) Create the map (declare ONCE) ---
+    // Create the map once
     const map = L.map('map', { center:[64.9631,-19.0208], zoom:6, zoomControl:true });
-
-    // Satellite base
     L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { attribution: 'Tiles © Esri — USGS, NOAA', maxZoom: 18 }
+      { attribution: 'Tiles © Esri — USGS, NOAA', maxZoom:18 }
     ).addTo(map);
+  </script>
 
-    // --- 2) Helpers & state ---
-    const legLayers = {};
-    const bounds = L.latLngBounds();
-    const listEl = document.getElementById('checkboxes');
-
-    function parseLatLon(pair){
-      if(!pair) return null;
-      const [lat, lon] = String(pair).split(',').map(s => Number(s.trim()));
-      if(Number.isNaN(lat) || Number.isNaN(lon)) return null;
-      return [lat, lon]; // sheet is lat,lon
-    }
-
-    function addLegRow(name){
-      const row = document.createElement('div');
-      row.className = 'filter-item';
-      row.innerHTML = `
-        <label>
-          <input type="checkbox" checked onchange="toggleLeg('${name.replace(/'/g,"&#39;")}', this.checked)">
-          ${name}
-        </label>`;
-      listEl.appendChild(row);
-    }
-
-    // --- 3) Render after CSV loads ---
-    loadSwimLegs().then(rows => {
-      rows.forEach((r, idx) => {
-        // Expected headers (exact): filename,start_date,finish_date,start_time,end_time,start_coordinates,end_coordinates
-        const start = parseLatLon(r.start_coordinates);
-        const end   = parseLatLon(r.end_coordinates);
-        if(!start || !end) return;
-
-        const name = (r.filename && r.filename.trim()) || `Leg ${idx+1}`;
-
-        const line = L.polyline([start, end], { color:'red', weight:4, opacity:0.9 })
-          .bindPopup(
-            `<strong>${name}</strong><br>
-             ${r.start_date||''} ${r.start_time||''} → ${r.finish_date||''} ${r.end_time||''}<br>
-             <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
-          )
-          const line = L.polyline([start, end], { color:'red', weight:4, opacity:0.9 })
-          .bindPopup(
-            `<strong>${name}</strong><br>
-             ${r.start_date||''} ${r.start_time||''} → ${r.finish_date||''} ${r.end_time||''}<br>
-             <small>Start: ${r.start_coordinates}<br>End: ${r.end_coordinates}</small>`
-          )
-          .bindTooltip(name)   // <---- shows filename on hover
-          .addTo(map);
-
-        legLayers[name] = line;
-        bounds.extend(line.getBounds());
-        addLegRow(name);
-      });
-
-      if(bounds.isValid()) map.fitBounds(bounds.pad(0.1));
-      else console.warn('No lines drawn. Check CSV field names and coordinate format.');
-    }).catch(err => {
-      console.error('Failed to load swim legs:', err);
-      alert('Could not load swim legs. Open console for details.');
-    });
-
-    // --- 4) UI controls ---
-    window.toggleLeg = function(id, show){
-      const layer = legLayers[id];
-      if(!layer) return;
-      if(show) layer.addTo(map); else map.removeLayer(layer);
-    };
-    window.showAll = function(){
-      Object.keys(legLayers).forEach(id => {
-        legLayers[id].addTo(map);
-        const input = [...document.querySelectorAll('#checkboxes input')].find(i => i.nextSibling.nodeValue.trim()===id);
-        if(input) input.checked = true;
-      });
-    };
-    window.clearAll = function(){
-      Object.keys(legLayers).forEach(id => {
-        map.removeLayer(legLayers[id]);
-        const input = [...document.querySelectorAll('#checkboxes input')].find(i => i.nextSibling.nodeValue.trim()===id);
-        if(input) input.checked = false;
-      });
-    };
+  <!-- Multi-dataset loader -->
+  <script src="swim-legs.js"></script>
+  <script>
+    // kick off rendering after map is created
+    initSwimMap(map);
   </script>
 </body>
 </html>
