@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Iceland Swim Map - All 4 Sets</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { margin:0; display:flex; font-family:Arial,sans-serif; }
+    #filters { width:280px; padding:16px; background:#fff; border-right:1px solid #ddd; overflow-y:auto; height:100vh; }
+    #map { flex:1; height:100vh; }
+    .filter-item{ margin:8px 0; }
+    button{ margin-right:6px; }
+    h4 { margin: 12px 0 6px; border-bottom:1px solid #ccc; padding-bottom:4px; }
+  </style>
+</head>
+<body>
+  <div id="filters">
+    <h3>Swim Legs (All 4 Sets)</h3>
+    <div id="checkboxes"></div>
+    <button onclick="showAll()">Show All</button>
+    <button onclick="clearAll()">Clear All</button>
+  </div>
+  <div id="map"></div>
+
+  <!-- Libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Data loader -->
+  <script src="swim-legs-all4.js"></script>
+</body>
+</html>
