@@ -1,5 +1,5 @@
 // ================= CONFIG =================
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTI-jHa9Jf_E-F5O5sFFcDdTzkvoapQdJiW-rFG6Pz25gqWeRIFhIdkNYvI909JBRb8lf7EsF_U_W4C/pub?output=csv'; // raw GitHub URL or Sheets output=csv
+const SHEET_CSV_URL = 'https://raw.githubusercontent.com/rose2023va/Ross-Edgley-Swim-Map/refs/heads/main/consolidated_gpx%20-%20consolidated_gpx.csv'; // raw GitHub URL or Sheets output=csv
 
 // =============== UTILITIES ================
 function normalizeHeader(h){
