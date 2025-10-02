@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Ross Edgley Swim – Final Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      font-family: Arial, sans-serif;
+    }
+    #filters {
+      width: 280px;
+      padding: 14px;
+      background: #fff;
+      border-right: 1px solid #ddd;
+      overflow-y: auto;
+      height: 100vh;
+    }
+    #map {
+      flex: 1;
+      height: 100vh;
+    }
+    .dataset {
+      margin: 10px 0 16px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 6px;
+    }
+    .dataset h4 {
+      margin: 0 0 6px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 14px;
+    }
+    .collapse-toggle {
+      cursor: pointer;
+      font-weight: bold;
+      color: #666;
+      margin-right: 6px;
+    }
+    .filter-item {
+      margin: 4px 0;
+      font-size: 13px;
+    }
+    button {
+      font-size: 12px;
+      padding: 2px 6px;
+      margin-left: 2px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div id="filters">
+    <h3>Ross Edgley Swim – Final Map</h3>
+    <div id="checkboxes"></div>
+    <div style="margin-top:10px;">
+      <button onclick="showAll()">Show All</button>
+      <button onclick="clearAll()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Leaflet + PapaParse -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Multi-dataset map logic -->
+  <script src="Ross-Edgley-Swim-final-map.js"></script>
+
+  <script>
+    // Create map first
+    const map = L.map('map', {
+      center: [64.9631, -19.0208],
+      zoom: 6,
+      zoomControl: true
+    });
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri — USGS, NOAA', maxZoom: 18 }
+    ).addTo(map);
+
+    // Kick off rendering
+    initSwimMap(map);
+  </script>
+</body>
+</html>
